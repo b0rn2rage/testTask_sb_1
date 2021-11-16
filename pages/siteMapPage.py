@@ -10,6 +10,3 @@ class SiteMapPage(BasePage):
 
     def get_all_folders(self) -> []:
         return self.browser.find_elements(By.CSS_SELECTOR, "loc")
-
-    def get_all_canonical(self) -> []:
-        return self.browser.find_elements(By.XPATH, "//link[@rel='canonical']")
