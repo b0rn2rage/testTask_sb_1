@@ -1,37 +1,39 @@
 import requests
-from pages.siteMapPage import SiteMapPage
-from selenium.webdriver.common.by import By
+from bs4 import BeautifulSoup
 
 
-def test_links_in_sitemap(browser, homepage):
-    sitemap_page: SiteMapPage = SiteMapPage(browser, homepage)
-    sitemap_page.open_sitemap()
-    print(f"Текущий URL = {browser.current_url}")
-    all_folders: list = sitemap_page.get_all_folders()
-    print(f"Количество элементов, содержащих ссылки = {len(all_folders)}")
-    links: list = [folder.get_attribute("innerHTML") for folder in all_folders]
-    pages_where_code_is_200 = []
+def test_links_in_sitemap():
+    r = requests.get("https://www.cybersport.ru/sitemap.xml")  # URL сайта, который будет тестироваться
+    xml = r.text
+
+    soup = BeautifulSoup(xml)
+    sitemap_tags = soup.find_all("sitemap")  # Ищем все элементы sitemap с XML страницы
+    print(f"Количество sitemap элементов =  {len(sitemap_tags)}")
+
+    links_on_another_sitemaps = [sitemap.findNext("loc").text for sitemap in sitemap_tags]  # Здесь все sitemap с сайта
+
     with open("don't 200.txt", 'w') as f:
-        for link in links:
-            print(f"Ссылка = {link}")
-            r = requests.get(link)  # Проверил статус код страницы
-            print(f"Статус код = {r.status_code}")
-            if r.status_code != 200:
-                f.write(link + " " + str(r.status_code) + "\n")
-            if r.status_code == 200:
-                pages_where_code_is_200.append(link)
-    for page in pages_where_code_is_200:  # Итерироваться по всем страницам, которые вернули 200
-        browser.get(page)
-        print(f"Открытие страницы {page}")
+        for sitemap in links_on_another_sitemaps:
+            r2 = requests.get(sitemap)
+            xml2 = r2.text
+            soup2 = BeautifulSoup(xml2)
+            url_tags = soup2.find_all("url")
+            print(f"Количество url элементов на этой sitemap {len(url_tags)}")
 
-        # Найти на странице все элементы с атрибутом rel="canonical"
-        all_canonical = browser.find_elements(By.XPATH, "//link[@rel='canonical']")
-        for x in all_canonical:  # Список элементов в которых содержатся каноничные ссылки
-            canonical_link = x.get_attribute("href")  # Получить каноничную ссылку
+            url_on_this_sitemap = [url.findNext("loc").text for url in url_tags]  # Здесь все URL с определенной sitemap
 
-            # Дальше здесь должно быть какое-то сравнение каноничной ссылки с текущей ссылкой в браузере.
-            # Каким образом сравнивать URL текущей страницы (на которую сделан переход) с каноничным URL ?
-            # Что является критерием сравнения,  вхождение по строке?
+            for url in url_on_this_sitemap:
+                r3 = requests.get(url)
+                print(f"Делаем GET запрос по URL = {url}")
+                if r3.status_code != 200:  # Если статус код != 200, то записать в файл
+                    f.write(url + " " + str(r3.status_code) + "\n")
+                if r3.status_code == 200:   # Если 200, то распарсить html странички и найти все каноничные ссылки
+                    soup3 = BeautifulSoup(r3.text, "html.parser")
+                    results = soup3.findAll("link", {"rel": "canonical"})
+                    print(f"Список всех элементов со страницы, в которых были найдены тэг rel='canonical' = {results}")
+                    for result in results:
+                        canonical_link = result.get("href")  # Получить каноничную ссылку из элемента
+                        assert url == canonical_link, "Каноничная ссылка != текущему URL"
 
 
 
